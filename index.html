@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RESQ-AI — Disaster Response Intelligence</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#080D12; --panel:#101820; --panel2:#141E27; --panel3:#0D141B; --line:#1E2A34;
+    --text:#EEF1F4; --muted:#8FA0AF; --muted2:#5D6E7C;
+    --critical:#F0525A; --high:#F5A93F; --moderate:#EBD860; --low:#33CC96;
+    --teal:#2DE0C6; --blue:#63A8E8; --purple:#A78BFA;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:radial-gradient(circle at 15% 0%, #0E1620 0%, transparent 45%),radial-gradient(circle at 90% 15%, #0C1A1C 0%, transparent 40%),radial-gradient(circle at 50% 100%, #0A1A22 0%, transparent 50%),var(--bg);background-attachment:fixed;color:var(--text);font-family:'IBM Plex Sans',sans-serif;min-height:100vh;}
+  body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:0.4;background-image:radial-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);background-size:26px 26px;}
+  header, nav, main, footer{position:relative;z-index:1;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  header{padding:20px 32px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden;flex-wrap:wrap;gap:10px;}
+  header .brand{display:flex;align-items:center;gap:12px;}
+  .logo{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--blue));display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .logo svg{width:19px;height:19px;}
+  header h1{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:800;margin:0;letter-spacing:0.3px;}
+  header .tag{color:var(--muted);font-size:12px;font-family:'IBM Plex Mono',monospace;}
+  header .status{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--low);font-family:'IBM Plex Mono',monospace;background:rgba(51,204,150,0.08);border:1px solid rgba(51,204,150,0.25);padding:6px 12px;border-radius:100px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--low);box-shadow:0 0 0 3px rgba(51,204,150,0.15);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .scan{position:absolute;top:0;left:-40%;width:40%;height:100%;background:linear-gradient(90deg,transparent,rgba(45,224,198,0.05),transparent);animation:sweep 7s linear infinite;pointer-events:none;}
+  @keyframes sweep{0%{left:-40%}100%{left:100%}}
+  nav{display:flex;gap:2px;padding:0 32px;border-bottom:1px solid var(--line);background:rgba(16,24,32,0.6);backdrop-filter:blur(6px);overflow-x:auto;position:sticky;top:0;z-index:10;}
+  nav button{background:none;border:none;color:var(--muted);font-family:'IBM Plex Sans',sans-serif;font-size:13px;font-weight:600;padding:14px 14px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;display:flex;align-items:center;gap:6px;transition:color .15s;}
+  nav button svg{width:15px;height:15px;opacity:0.7;transition:opacity .15s;}
+  nav button:hover{color:var(--text);}
+  nav button.active{color:var(--teal);border-bottom-color:var(--teal);}
+  nav button.active svg{opacity:1;}
+  main{padding:28px 32px 60px;max-width:1200px;margin:0 auto;}
+  .view{display:none;animation:fadeIn .25s ease;} .view.active{display:block;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+  .grid{display:grid;gap:16px;}
+  .cols-4{grid-template-columns:repeat(4,1fr);} .cols-3{grid-template-columns:repeat(3,1fr);} .cols-2{grid-template-columns:1fr 1fr;}
+  @media(max-width:900px){.cols-4,.cols-3,.cols-2{grid-template-columns:1fr;}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel3));border:1px solid var(--line);border-radius:12px;padding:18px 20px;}
+  .card h3{margin:0 0 6px;font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.7px;}
+  .card .big{font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:800;line-height:1.1;}
+  .stat-card{position:relative;overflow:hidden;}
+  .stat-card::after{content:'';position:absolute;top:0;right:0;width:70px;height:70px;border-radius:50%;filter:blur(24px);opacity:0.25;}
+  .stat-card.sc-critical::after{background:var(--critical);}
+  .stat-card.sc-high::after{background:var(--high);}
+  .stat-card.sc-people::after{background:var(--blue);}
+  .stat-card.sc-reports::after{background:var(--purple);}
+  .section-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;margin:34px 0 14px;color:var(--text);display:flex;align-items:center;gap:8px;}
+  .section-title:first-child{margin-top:0;}
+  .badge{display:inline-block;padding:3px 11px;border-radius:100px;font-size:11px;font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:0.4px;}
+  .b-critical{background:rgba(240,82,90,0.16);color:var(--critical);}
+  .b-high{background:rgba(245,169,63,0.16);color:var(--high);}
+  .b-moderate{background:rgba(235,216,96,0.16);color:var(--moderate);}
+  .b-low{background:rgba(51,204,150,0.16);color:var(--low);}
+  .b-confirm{background:rgba(99,168,232,0.16);color:var(--blue);}
+  .badge.pulse-badge{animation:badgepulse 1.6s infinite;}
+  @keyframes badgepulse{0%,100%{box-shadow:0 0 0 0 rgba(240,82,90,0.35)}50%{box-shadow:0 0 0 6px rgba(240,82,90,0)}}
+  textarea,input[type=text],input[type=number]{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;transition:border-color .15s;}
+  textarea:focus,input:focus,select:focus{outline:none;border-color:var(--teal);}
+  select{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:10px 12px;font-family:'IBM Plex Sans',sans-serif;font-size:14px;}
+  textarea{min-height:70px;resize:vertical;}
+  button.action{background:linear-gradient(135deg,var(--teal),#1FBFA8);color:#04241E;border:none;border-radius:9px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;transition:transform .15s, box-shadow .15s;box-shadow:0 4px 14px rgba(45,224,198,0.18);}
+  button.action:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(45,224,198,0.28);}
+  button.action:disabled{opacity:0.5;cursor:not-allowed;transform:none;box-shadow:none;}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--muted);border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer;margin:0 6px 6px 0;transition:all .15s;}
+  button.ghost:hover{color:var(--text);border-color:var(--muted2);background:rgba(255,255,255,0.02);}
+  .report-row{border:1px solid var(--line);border-radius:10px;padding:13px 15px;margin-bottom:10px;background:var(--panel2);animation:fadeIn .3s ease;}
+  .report-row .meta{font-size:11px;color:var(--muted);margin-top:6px;font-family:'IBM Plex Mono',monospace;}
+  .zone-card{border:1px solid var(--line);border-radius:12px;padding:16px;background:linear-gradient(180deg,var(--panel2),var(--panel3));cursor:pointer;transition:transform .18s, border-color .18s, box-shadow .18s;}
+  .zone-card:hover{transform:translateY(-3px);border-color:var(--muted2);box-shadow:0 8px 22px rgba(0,0,0,0.35);}
+  .zone-card.zc-critical{border-left:3px solid var(--critical);}
+  .zone-card.zc-high{border-left:3px solid var(--high);}
+  .zone-card.zc-moderate{border-left:3px solid var(--moderate);}
+  .zone-card.zc-low{border-left:3px solid var(--low);}
+  .zone-card .row{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;}
+  .zone-card .score{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:800;}
+  .factor-bar-row{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:10.5px;color:var(--muted);}
+  .factor-bar-track{flex:1;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;}
+  .factor-bar-fill{height:100%;border-radius:3px;}
+  .factor-label{width:76px;flex-shrink:0;}
+  .factor-val{width:30px;text-align:right;flex-shrink:0;font-family:'IBM Plex Mono',monospace;}
+  #pickmap,#map{height:400px;border-radius:12px;overflow:hidden;border:1px solid var(--line);}
+  .muted{color:var(--muted);}
+  .note{font-size:12px;color:var(--muted2);margin-top:10px;line-height:1.6;}
+  input[type=file]{color:var(--muted);font-size:13px;}
+  canvas{max-width:100%;border-radius:9px;border:1px solid var(--line);background:#000;}
+  .disclaimer{background:rgba(245,169,63,0.07);border:1px solid rgba(245,169,63,0.22);border-radius:9px;padding:11px 14px;font-size:12px;color:var(--high);margin-top:12px;}
+  .risk-warn{background:rgba(240,82,90,0.07);border:1px solid rgba(240,82,90,0.25);border-radius:9px;padding:10px 14px;font-size:12px;color:var(--critical);margin-top:10px;font-weight:600;}
+  .confirm-warn{background:rgba(99,168,232,0.08);border:1px solid rgba(99,168,232,0.28);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--blue);margin-top:8px;font-weight:600;}
+  .action-box{background:var(--panel3);border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px;}
+  .coord-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;}
+  .coord-row input,.coord-row select{flex:1;min-width:120px;}
+  .data-src{font-size:10.5px;color:var(--muted2);margin-top:3px;}
+  .datatag{font-size:9.5px;font-weight:700;letter-spacing:0.5px;padding:2px 7px;border-radius:5px;text-transform:uppercase;}
+  .tag-live{background:rgba(51,204,150,0.15);color:var(--low);}
+  .tag-demo{background:rgba(143,160,175,0.15);color:var(--muted);}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:12px;}
+  .legend span{display:inline-flex;align-items:center;gap:5px;}
+  .legend .sw{width:10px;height:10px;border-radius:50%;display:inline-block;}
+  label.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);margin-top:12px;cursor:pointer;}
+  .alert-banner{border-radius:12px;padding:16px 20px;display:flex;align-items:center;gap:14px;margin-bottom:20px;border:1px solid;}
+  .alert-banner.ab-critical{background:rgba(240,82,90,0.08);border-color:rgba(240,82,90,0.3);}
+  .alert-banner.ab-calm{background:rgba(51,204,150,0.06);border-color:rgba(51,204,150,0.25);}
+  .alert-banner .icon-wrap{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .ab-critical .icon-wrap{background:rgba(240,82,90,0.2);}
+  .ab-calm .icon-wrap{background:rgba(51,204,150,0.2);}
+  .hero-row{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;margin-bottom:20px;}
+  .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,0.15);border-top-color:var(--teal);border-radius:50%;display:inline-block;animation:spin .7s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .unit-chip{display:inline-flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:100px;padding:5px 12px;font-size:12px;margin:0 6px 6px 0;}
+  .plan-box{background:#050A0E;border:1px solid var(--line);border-radius:10px;padding:22px;font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.9;white-space:pre-wrap;color:#CFE8E0;}
+  .plan-box .hl-critical{color:var(--critical);font-weight:600;}
+  .plan-box .hl-high{color:var(--high);font-weight:600;}
+  .plan-box .hl-teal{color:var(--teal);font-weight:600;}
+  @media print{ header,nav,.no-print{display:none !important;} main{padding:0;max-width:100%;} body{background:#fff;color:#000;} .plan-box{background:#fff;color:#000;border-color:#000;} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="scan"></div>
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#04241E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 L4 12 L8 12 L6 22 L20 10 L14 10 Z"/></svg></div>
+    <div><h1>RESQ-AI</h1><span class="tag">disaster response intelligence — Pakistan</span></div>
+  </div>
+  <div class="status"><span class="dot"></span>DEMO MODE — DECISION SUPPORT ONLY</div>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-view="overview"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Overview</button>
+  <button class="tab-btn" data-view="select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Select &amp; Analyze</button>
+  <button class="tab-btn" data-view="reports"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Reports</button>
+  <button class="tab-btn" data-view="zones"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Zones</button>
+  <button class="tab-btn" data-view="map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>Map &amp; Rescue</button>
+  <button class="tab-btn" data-view="analytics"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>Analytics</button>
+  <button class="tab-btn" data-view="plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2h6a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/><path d="M9 7h6M9 11h6M9 15h3"/></svg>Response Plan</button>
+</nav>
+
+<main>
+
+  <div class="view active" id="v-overview">
+    <div class="alert-banner ab-critical" id="alert-banner">
+      <div class="icon-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--critical)" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.3 1.8 18a1.8 1.8 0 0 0 1.6 2.7h17.2a1.8 1.8 0 0 0 1.6-2.7L13.7 3.3a1.8 1.8 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13.5"/><line x1="12" y1="16.5" x2="12" y2="16.6"/></svg></div>
+      <div><strong id="alert-text" style="font-size:14px;">Loading disaster status...</strong><div class="muted" style="font-size:12px;margin-top:2px;" id="alert-sub"></div></div>
+    </div>
+
+    <div class="hero-row">
+      <div class="section-title" style="margin:0;">Active disaster — <span id="region-label">Dadu district, Sindh</span></div>
+      <select id="hazard-mode" onchange="onHazardModeChange()" style="width:auto;">
+        <option value="FLOOD">🌊 Rain &amp; Flood — fully implemented</option>
+        <option value="EARTHQUAKE">🏚️ Earthquake — demo only</option>
+        <option value="CYCLONE">🌀 Cyclone — demo only</option>
+        <option value="HEATWAVE">🌡️ Heatwave — demo only</option>
+        <option value="DROUGHT">🏜️ Drought — demo only</option>
+      </select>
+    </div>
+    <div class="card" style="margin-bottom:20px;padding:14px 18px;">
+      <p class="note" id="hazard-mode-note" style="margin:0;">Flood mode uses the full real-data pipeline below.</p>
+      <p class="note" style="margin:8px 0 0;">These five categories match the official hazard framework used by <a href="https://pdma.gos.pk/" target="_blank" style="color:var(--teal)">PDMA Sindh</a> (Provincial Disaster Management Authority). <strong>Only Flood is wired to real data</strong> — satellite imagery, live rainfall, real infrastructure counts. The other four reuse the identical scoring engine and interface to demonstrate the architecture generalizes, but aren't yet connected to hazard-specific real-time sources (e.g. seismic data for Earthquake, PMD cyclone tracks for Cyclone). This is an honest scope choice, not a limitation of the design.</p>
+    </div>
+
+    <div class="grid cols-4">
+      <div class="card stat-card sc-critical"><h3>Critical zones</h3><div class="big" style="color:var(--critical)" id="ov-critical">0</div></div>
+      <div class="card stat-card sc-high"><h3>High priority</h3><div class="big" style="color:var(--high)" id="ov-high">0</div></div>
+      <div class="card stat-card sc-people"><h3>Est. people at risk</h3><div class="big" id="ov-people">0</div></div>
+      <div class="card stat-card sc-reports"><h3>Citizen reports logged</h3><div class="big" id="ov-reports">0</div></div>
+    </div>
+    <div class="section-title">What this system does</div>
+    <div class="card">
+      <p style="margin:0 0 10px;font-size:14px;line-height:1.7;">RESQ-AI fuses satellite imagery, rainfall data, infrastructure data, and citizen reports (English, Urdu, Roman Urdu) into a single explainable priority score per zone — for <strong>authorized responders</strong> to act on.</p>
+      <div class="disclaimer">This is an AI decision-support system. It estimates and recommends — it does not autonomously dispatch resources or guarantee outcomes. Every output should be confirmed by a human responder before action.</div>
+      <p class="note">Zones below start with realistic demo data so the dashboard is fully populated immediately. Go to <strong>Select &amp; Analyze</strong> to replace it with live data for any real location.</p>
+    </div>
+  </div>
+
+  <div class="view" id="v-select">
+    <div class="section-title">Pick a location</div>
+    <div class="card">
+      <p class="muted" style="font-size:13px;margin-top:0;">Click anywhere on the map to drop a marker, or type coordinates directly.</p>
+      <div id="pickmap"></div>
+      <div class="coord-row">
+        <input type="text" id="sel-name" placeholder="Region name (e.g. Multan, Punjab)">
+        <input type="number" id="sel-lat" placeholder="Latitude" step="0.0001">
+        <input type="number" id="sel-lon" placeholder="Longitude" step="0.0001">
+        <button class="action" onclick="setFromInputs()">Use these coordinates</button>
+      </div>
+      <p class="note">Selected: <strong id="sel-current">26.7325, 67.7710 (Dadu district, Sindh)</strong></p>
+    </div>
+
+    <div class="section-title">Run live analysis for this area</div>
+    <div class="card">
+      <p class="muted" style="font-size:13px;margin-top:0;">Pulls real satellite imagery, real rainfall (Open-Meteo), real infrastructure and facility counts (OpenStreetMap) — free, no API key.</p>
+      <button class="action" id="analyze-btn" onclick="runFullAnalysis()">Run live analysis for this location</button>
+      <span id="analysis-status" class="muted" style="font-size:12px;margin-left:10px;"></span>
+
+      <h3 style="color:var(--muted);font-size:12px;text-transform:uppercase;margin:18px 0 6px;">Live satellite image — flood overlay</h3>
+      <canvas id="canvas-recent" width="440" height="320"></canvas>
+      <p class="note" id="recent-src-note"></p>
+
+      <button class="ghost" id="toggle-before-btn" onclick="toggleBeforePanel()" style="margin-top:10px;">Show baseline comparison (~60 days earlier)</button>
+      <div id="before-panel" style="display:none;margin-top:10px;">
+        <h3 style="color:var(--muted);font-size:12px;text-transform:uppercase;margin-bottom:6px;">Baseline (optional, for comparison only)</h3>
+        <canvas id="canvas-before" width="440" height="320"></canvas>
+      </div>
+
+      <div class="grid cols-3" style="margin-top:16px;display:none;" id="flood-stats"></div>
+      <div id="confirm-flags"></div>
+
+      <div style="margin-top:18px;border-top:1px solid var(--line);padding-top:14px;">
+        <p class="muted" style="font-size:13px;margin:0 0 8px;">Or upload your own close-up photo instead:</p>
+        <input type="file" id="img-input" accept="image/*">
+        <div class="coord-row">
+          <input type="number" id="rainfall-mm" placeholder="Override rainfall, mm, last 24h (optional)">
+          <input type="number" id="flood-override" placeholder="Override flood coverage %, from ground reports (optional)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" id="v-reports">
+    <div class="section-title">Bilingual citizen report classifier</div>
+    <div class="card">
+      <select id="report-source">
+        <option value="Citizen">Citizen report</option>
+        <option value="Weather Department">Weather Department (official)</option>
+        <option value="Field Responder">Field Responder (official)</option>
+      </select>
+      <textarea id="report-text" placeholder="Type a report in English, Urdu, or Roman Urdu..." style="margin-top:10px;"></textarea>
+      <div style="margin-top:10px;">
+        <button class="ghost" onclick="fillSample('People are trapped near the bridge, children with them.')">EN sample</button>
+        <button class="ghost" onclick="fillSample('لوگ پل کے قریب پھنسے ہوئے ہیں')">UR sample</button>
+        <button class="ghost" onclick="fillSample('pani gharon mein daakhil ho gaya hai, bachon ko nikalna hai')">Roman Urdu sample</button>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="action" onclick="submitReport()">Classify &amp; log report</button>
+        <button class="ghost" onclick="autoGenerateReports()" style="margin:0;">Auto-generate sample incoming reports (demo)</button>
+      </div>
+      <p class="note">"Auto-generate" simulates several reports arriving at once for demo purposes only.</p>
+    </div>
+    <div class="section-title">Logged reports</div>
+    <div id="report-list"><p class="muted" style="font-size:13px;">No reports yet — submit one above, or auto-generate a batch.</p></div>
+  </div>
+
+  <div class="view" id="v-zones">
+    <div class="section-title">Zone priority board <span class="muted" style="font-weight:400;font-size:12px;">— click any zone to jump to it on the map</span></div>
+    <div class="grid cols-3" id="zones-grid"></div>
+  </div>
+
+  <div class="view" id="v-map">
+    <div class="section-title">Disaster map</div>
+    <div class="card">
+      <div id="map"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--critical)"></span>Critical zone</span>
+        <span><span class="sw" style="background:var(--high)"></span>High priority</span>
+        <span><span class="sw" style="background:var(--blue)"></span>Hospital / clinic</span>
+        <span><span class="sw" style="background:var(--teal)"></span>Shelter</span>
+        <span>🚑🧑‍🚒🚒 Response units (simulated)</span>
+      </div>
+      <label class="chk"><input type="checkbox" id="radar-toggle" onchange="toggleRadar()"> Show live rain radar (RainViewer)</label>
+      <p class="note" id="route-status">Route: showing demo estimate — run live analysis for a real routed path.</p>
+    </div>
+
+    <div class="section-title">🚑 Rescue team dispatch simulation</div>
+    <div class="card">
+      <p class="muted" style="font-size:13px;margin-top:0;">Simulated response units near the selected area. Dispatch one to any zone and watch it move along the route on the map — useful for a live presentation.</p>
+      <div id="unit-chips"></div>
+      <div class="coord-row">
+        <select id="dispatch-unit"></select>
+        <select id="dispatch-zone"></select>
+        <button class="action" onclick="dispatchUnit()">Dispatch</button>
+      </div>
+      <p class="note" id="dispatch-status"></p>
+    </div>
+  </div>
+
+  <div class="view" id="v-plan">
+    <div class="section-title no-print">One-click response plan</div>
+    <div class="card no-print">
+      <p class="muted" style="font-size:13px;margin-top:0;">Generates a structured response plan from the current highest-priority zone — for a responder or judge to review at a glance.</p>
+      <button class="action" onclick="generateResponsePlan()">⚡ Generate Response Plan</button>
+      <button class="ghost" onclick="exportPlanText()">Export as .txt</button>
+      <button class="ghost" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+    <div id="plan-output" style="margin-top:18px;"></div>
+  </div>
+
+  <div class="view" id="v-analytics">
+    <div class="section-title">Analytics dashboard</div>
+    <div class="grid cols-4" id="analytics-kpis"></div>
+
+    <div class="section-title">Severity distribution</div>
+    <div class="card">
+      <div id="band-distribution-bars"></div>
+    </div>
+
+    <div class="section-title">All zones, ranked</div>
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="text-align:left;border-bottom:1px solid var(--line);">
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Zone</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Score</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Band</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">People</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Flood</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Infra</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Roads</th>
+            <th style="padding:12px 16px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;">Weather</th>
+          </tr>
+        </thead>
+        <tbody id="analytics-table-body"></tbody>
+      </table>
+    </div>
+    <p class="note">This dashboard updates live as you analyze new areas or log citizen reports.</p>
+  </div>
+
+</main>
+
+<footer style="border-top:1px solid var(--line);padding:20px 32px;text-align:center;">
+  <p style="font-size:12px;color:var(--muted);margin:0 0 6px;">Official Sindh emergency contacts, for reference — <a href="https://pdma.gos.pk/" target="_blank" style="color:var(--teal)">PDMA Sindh</a></p>
+  <p style="font-size:13px;font-weight:700;margin:0;font-family:'IBM Plex Mono',monospace;">
+    <span style="color:var(--critical)">☎ PDMA Helpline: 1736</span>
+    &nbsp;&nbsp;·&nbsp;&nbsp;
+    <span style="color:var(--high)">☎ Rescue 1122</span>
+  </p>
+  <p class="note" style="margin-top:8px;">RESQ-AI is an independent decision-support prototype and is not affiliated with or endorsed by PDMA Sindh. Hazard categories referenced above follow PDMA Sindh's public framework for attribution and realism only.</p>
+</footer>
+
+<script>
+/* ============ small helpers ============ */
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function fetchWithTimeout(url, opts, ms){
+  const controller = new AbortController();
+  const id = setTimeout(()=>controller.abort(), ms || 8000);
+  try{ const res = await fetch(url, {...(opts||{}), signal: controller.signal}); clearTimeout(id); return res; }
+  catch(e){ clearTimeout(id); return null; }
+}
+function animateCount(el, to){
+  const from = parseInt(el.textContent.replace(/[^0-9]/g,''),10) || 0;
+  const dur=500, start=performance.now();
+  function step(t){
+    const p=Math.min(1,(t-start)/dur);
+    const val=Math.round(from+(to-from)*p);
+    el.textContent = el.dataset.prefix ? el.dataset.prefix+val.toLocaleString() : val.toLocaleString();
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ============ Bilingual classifier ============ */
+const KEYWORDS = {
+  PEOPLE_NEED_RESCUE:{en:["trapped","stuck","stranded","rescue","help us","can't get out","surrounded by water"],ur:["پھنسے","پھنس گئے","بچاؤ","مدد چاہیے","نکالو"],roman:["phans","phanse","phansay","bachao","madad chahiye","nikalo","atkay"]},
+  MEDICAL_EMERGENCY:{en:["injured","bleeding","unconscious","sick","medicine","pregnant","labor pain","heart attack"],ur:["زخمی","بیمار","دوائی","حاملہ","بے ہوش"],roman:["zakhmi","bemar","beemar","dawai","hamila","behosh"]},
+  FLOOD:{en:["flood","water level","water rising","submerged","overflow"],ur:["سیلاب","پانی","طغیانی"],roman:["seelab","pani","paani","sailab","tughyani"]},
+  ROAD_BLOCKED:{en:["road blocked","bridge collapsed","route closed","can't pass","road washed away"],ur:["راستہ بند","پل ٹوٹ گیا","سڑک بند"],roman:["rasta band","pul toot","sadak band","road band"]},
+  BUILDING_DAMAGE:{en:["collapsed","house destroyed","wall fell","roof caved","building damaged"],ur:["گھر گر گیا","چھت گر گئی","دیوار گری"],roman:["ghar gir gaya","chatt gir gayi","deewar giri","makan tabah"]},
+  FOOD_WATER_NEEDED:{en:["no food","no clean water","hungry","need food","need drinking water"],ur:["کھانا نہیں","پانی نہیں","بھوکے"],roman:["khana nahi","bhookay","khaana chahiye"]},
+  SHELTER_NEEDED:{en:["no shelter","homeless","need tent","nowhere to stay","camp"],ur:["پناہ گاہ","خیمہ","رہنے کی جگہ نہیں"],roman:["panah gah","khaima","rehne ki jaga nahi"]}
+};
+const CRIT_EN=["children","kids","elderly","old","many people","drowning"];
+const CRIT_UR=["بچے","بوڑھے","ڈوب"];
+const CRIT_ROMAN=["bachon","bachay","buddhay","boorhay","doob","dub"];
+const ACTIONS = {
+  PEOPLE_NEED_RESCUE:"Dispatch nearest rescue team immediately. Confirm exact location with reporter if possible before sending responders.",
+  MEDICAL_EMERGENCY:"Alert nearest medical/ambulance unit. Treat as time-critical until confirmed otherwise.",
+  FLOOD:"Log for zone flood-severity tracking. Escalate if multiple reports cluster in the same area.",
+  ROAD_BLOCKED:"Flag road segment as high-risk for routing. Confirm with a second source before marking fully impassable.",
+  BUILDING_DAMAGE:"Flag structure for inspection. Do not assume occupants have evacuated.",
+  FOOD_WATER_NEEDED:"Add to supply-drop queue. Not immediately life-threatening unless paired with other critical reports.",
+  SHELTER_NEEDED:"Add to shelter-allocation queue.",
+  OTHER:"No clear action category detected — needs manual human review before any response is planned.",
+};
+function needsHumanConfirmation(confidence, threshold=0.6){ return confidence < threshold; }
+function detectLang(text){
+  const hasUrdu=/[\u0600-\u06FF]/.test(text);
+  const hasLatin=/[A-Za-z]/.test(text);
+  if(hasUrdu && hasLatin) return "mixed";
+  if(hasUrdu) return "ur";
+  if(hasLatin){
+    const lower=text.toLowerCase();
+    let hits=0;
+    Object.values(KEYWORDS).forEach(k=>k.roman.forEach(t=>{if(lower.includes(t))hits++;}));
+    return hits>0 ? "roman_ur" : "en";
+  }
+  return "unknown";
+}
+function classifyReport(text){
+  if(!text || !text.trim()) return {language:"unknown",category:"OTHER",severity:"LOW",confidence:0,matched:[]};
+  const lower=text.toLowerCase();
+  const lang=detectLang(text);
+  const scores={}; const matched=[];
+  Object.entries(KEYWORDS).forEach(([cat,langs])=>{
+    scores[cat]=0;
+    ["en","roman"].forEach(k=>langs[k].forEach(term=>{
+      if(lower.includes(term.toLowerCase())){scores[cat]++;matched.push(term);}
+    }));
+    langs.ur.forEach(term=>{ if(text.includes(term)){scores[cat]++;matched.push(term);} });
+  });
+  let best="OTHER", bestScore=0;
+  Object.entries(scores).forEach(([c,s])=>{ if(s>bestScore){best=c;bestScore=s;} });
+  const totalHits=Object.values(scores).reduce((a,b)=>a+b,0);
+  const critHit = CRIT_EN.some(m=>lower.includes(m)) || CRIT_UR.some(m=>text.includes(m)) || CRIT_ROMAN.some(m=>lower.includes(m));
+  let severity;
+  if(["PEOPLE_NEED_RESCUE","MEDICAL_EMERGENCY"].includes(best) || critHit) severity="CRITICAL";
+  else if(["FLOOD","ROAD_BLOCKED","BUILDING_DAMAGE"].includes(best)) severity = totalHits>=2 ? "HIGH":"MODERATE";
+  else if(["FOOD_WATER_NEEDED","SHELTER_NEEDED"].includes(best)) severity="MODERATE";
+  else severity="LOW";
+  const confidence = totalHits>0 ? Math.min(0.5+0.15*totalHits,0.95) : 0.35;
+  return {language:lang, category:best, severity, confidence:Math.round(confidence*100)/100, matched:[...new Set(matched)]};
+}
+function recommendedAction(category, severity){
+  return (severity==="CRITICAL"?"PRIORITY: ":"") + (ACTIONS[category] || ACTIONS.OTHER);
+}
+let reportCount=0;
+let reportCategoryTally = {};
+function fillSample(t){ document.getElementById('report-text').value=t; }
+function logReport(text, source){
+  const r=classifyReport(text);
+  const action=recommendedAction(r.category, r.severity);
+  reportCount++;
+  reportCategoryTally[r.category] = (reportCategoryTally[r.category]||0) + 1;
+  animateCount(document.getElementById('ov-reports'), reportCount);
+  const sevClass = {CRITICAL:'b-critical',HIGH:'b-high',MODERATE:'b-moderate',LOW:'b-low'}[r.severity];
+  const sourceTag = source === 'Citizen' ? '' : ` · <strong style="color:var(--teal)">${source}</strong>`;
+  const confirmFlag = needsHumanConfirmation(r.confidence) ? '<div class="confirm-warn">⚠ LOW CONFIDENCE — needs human confirmation before acting.</div>' : '';
+  const row=document.createElement('div');
+  row.className='report-row';
+  row.innerHTML = `<div>${text}</div>
+    <div class="meta">lang: ${r.language} · category: ${r.category} · confidence: ${(r.confidence*100).toFixed(0)}%${sourceTag}
+    ${r.matched.length ? ' · matched: '+r.matched.join(', ') : ''}</div>
+    <div style="margin-top:8px;"><span class="badge ${sevClass}">${r.severity}</span></div>
+    ${confirmFlag}
+    <div class="action-box"><strong>Recommended action:</strong> ${action}</div>
+    <div class="risk-warn">AI-generated assessment. Confirm on the ground before acting — use at your own risk.</div>`;
+  const list=document.getElementById('report-list');
+  if(list.firstChild && list.firstChild.tagName==='P') list.innerHTML='';
+  list.prepend(row);
+  updateAnalyticsCharts();
+}
+function submitReport(){
+  const text=document.getElementById('report-text').value;
+  if(!text.trim()) return;
+  logReport(text, document.getElementById('report-source').value);
+  document.getElementById('report-text').value='';
+}
+const DEMO_INCOMING_REPORTS = [
+  {text:"People are trapped near the bridge, children with them.", source:"Citizen"},
+  {text:"لوگ پل کے قریب پھنسے ہوئے ہیں", source:"Citizen"},
+  {text:"pani gharon mein daakhil ho gaya hai, bachon ko nikalna hai", source:"Citizen"},
+  {text:"Heavy rainfall recorded, 68mm in the last 6 hours, rising trend expected.", source:"Weather Department"},
+  {text:"Road access to eastern sector confirmed blocked, alternate route required.", source:"Field Responder"},
+];
+function autoGenerateReports(){ DEMO_INCOMING_REPORTS.forEach(r => logReport(r.text, r.source)); }
+
+/* ============ Priority engine ============ */
+const WEIGHTS = {people_risk:0.30, flood_severity:0.25, infrastructure_damage:0.20, road_accessibility_risk:0.15, weather_risk:0.10};
+function computePriority(f){
+  let total=0; const breakdown=[];
+  Object.entries(WEIGHTS).forEach(([k,w])=>{
+    const v=Math.max(0,Math.min(100,f[k]||0));
+    total += v*w;
+    breakdown.push({factor:k, value:v});
+  });
+  const score=Math.round(total*10)/10;
+  let band; if(score>=85) band='CRITICAL'; else if(score>=65) band='HIGH'; else if(score>=40) band='MODERATE'; else band='LOW';
+  const labels={people_risk:'population exposure',flood_severity:'zone flooded',infrastructure_damage:'infrastructure damage index',road_accessibility_risk:'road accessibility risk',weather_risk:'weather/rainfall risk'};
+  const sorted=[...breakdown].sort((a,b)=>b.value-a.value);
+  const reasons = sorted.filter(b=>b.value>=40).slice(0,3).map(b=>`${b.value}% ${labels[b.factor]}`);
+  return {score, band, reasons: reasons.length?reasons:['No strong risk signal in any single factor']};
+}
+
+/* ============ Live rainfall (Open-Meteo) ============ */
+async function fetchRainfallOpenMeteo(lat, lon){
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=precipitation_sum&past_days=2&forecast_days=1&timezone=auto`;
+  const res = await fetchWithTimeout(url, null, 7000);
+  if(!res || !res.ok) return null;
+  try{
+    const json = await res.json();
+    const vals=json.daily.precipitation_sum, dates=json.daily.time;
+    const idx = vals.length-2>=0 ? vals.length-2 : vals.length-1;
+    return {mm: vals[idx], date: dates[idx]};
+  } catch(e){ return null; }
+}
+function weatherRiskFromRainfall(rainfallMm, source){
+  if(rainfallMm===null||rainfallMm===undefined||isNaN(rainfallMm)) return {value:50, source:'baseline default — no rainfall data available', live:false};
+  return {value: Math.round(Math.max(0,Math.min(100, rainfallMm/2))), source: source||`${rainfallMm}mm reported rainfall, last 24h`, live:true};
+}
+
+/* ============ Real infrastructure (Overpass) ============ */
+async function overpassCount(query){
+  const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {method:'POST', body:'data='+encodeURIComponent(query)}, 15000);
+  if(!res || !res.ok) return null;
+  try{
+    const data = await res.json();
+    const el = data.elements && data.elements[0];
+    return el && el.tags && el.tags.total ? parseInt(el.tags.total,10) : 0;
+  } catch(e){ return null; }
+}
+async function fetchInfrastructureCounts(lat, lon, d){
+  const bbox = `${lat-d},${lon-d},${lat+d},${lon+d}`;
+  const [buildingCount, roadCount] = await Promise.all([
+    overpassCount(`[out:json][timeout:25];way["building"](${bbox});out count;`),
+    overpassCount(`[out:json][timeout:25];way["highway"](${bbox});out count;`)
+  ]);
+  return {buildingCount, roadCount};
+}
+function infraRiskFromCounts(floodSeverity, buildingCount, roadCount){
+  if(buildingCount===null||roadCount===null){
+    return {infrastructure_damage: Math.round(floodSeverity*0.75), road_accessibility_risk: Math.round(floodSeverity*0.85),
+      source:'fallback estimate — live OpenStreetMap lookup unavailable', usedFallback:true};
+  }
+  const bf=Math.min(1.5,buildingCount/50), rf=Math.min(1.5,roadCount/20);
+  return {
+    infrastructure_damage: Math.round(Math.max(0,Math.min(100,floodSeverity*bf))),
+    road_accessibility_risk: Math.round(Math.max(0,Math.min(100,floodSeverity*rf))),
+    source:`real OpenStreetMap data — ${buildingCount} buildings, ${roadCount} roads nearby`, usedFallback:false
+  };
+}
+
+/* ============ Real hospitals/shelters ============ */
+async function fetchFacilities(lat, lon, d){
+  const bbox = `${lat-d},${lon-d},${lat+d},${lon+d}`;
+  const query = `[out:json][timeout:25];(node["amenity"="hospital"](${bbox});node["amenity"="clinic"](${bbox});node["emergency"="shelter"](${bbox});node["amenity"="shelter"](${bbox}););out;`;
+  const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {method:'POST', body:'data='+encodeURIComponent(query)}, 15000);
+  if(!res || !res.ok) return null;
+  try{
+    const data = await res.json();
+    return (data.elements||[]).slice(0,12).map(el => ({
+      lat: el.lat, lon: el.lon,
+      name: (el.tags && el.tags.name) || (el.tags && el.tags.amenity) || 'Unnamed facility',
+      type: (el.tags && el.tags.amenity==='hospital') ? 'hospital' : ((el.tags && el.tags.amenity==='clinic') ? 'clinic' : 'shelter')
+    }));
+  } catch(e){ return null; }
+}
+function defaultFacilities(lat, lon){
+  return [
+    {lat: lat+0.018, lon: lon-0.012, name:'District HQ Hospital (sample)', type:'hospital'},
+    {lat: lat-0.022, lon: lon+0.02, name:'Community Clinic (sample)', type:'clinic'},
+    {lat: lat+0.01, lon: lon+0.028, name:'Relief Camp (sample)', type:'shelter'},
+  ];
+}
+
+/* ============ Imagery loading — Esri only (reliable, no date-dependent
+   missing-data risk). NASA GIBS was dropped from the automatic flow: its
+   near-real-time imagery is date-dependent and can silently return a
+   blank/error tile even on a technically-successful request, which kept
+   causing "no image shown" even after the CORS fix. Esri's static export
+   service doesn't have that failure mode — it reliably returns a valid
+   image for any coordinates worldwide, which is what worked in the very
+   first version of this dashboard. */
+function dateStr(d){ return d.toISOString().slice(0,10); }
+function esriUrl(lat, lon, d){
+  const bbox = `${lon-d},${lat-d},${lon+d},${lat+d}`;
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${bbox}&bboxSR=4326&imageSR=4326&size=440,320&format=jpg&f=image`;
+}
+function loadImageForAnalysis(url, ms){
+  // Separate from the guaranteed-display loader: this one DOES request
+  // crossOrigin permission, because that's required to read pixels back.
+  // It's allowed to fail — the display image (loaded separately, always
+  // succeeds) is shown either way.
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    const t = setTimeout(()=>reject(new Error('timeout')), ms||8000);
+    img.onload = () => { clearTimeout(t); resolve(img); };
+    img.onerror = () => { clearTimeout(t); reject(new Error('load failed')); };
+    img.src = url;
+  });
+}
+// Deterministic per-location estimate used ONLY when real pixel analysis
+// is unavailable (blocked by the imagery server's CORS policy). Combines
+// a location-based hash with real rainfall (when available) so different
+// areas produce different numbers instead of one flat constant — while
+// being honestly labeled DEMO, never LIVE, since it isn't measured.
+function seededDemoCoverage(lat, lon, rainfallMm){
+  const hash = Math.abs(Math.sin(lat*12.9898 + lon*78.233) * 43758.5453) % 1;
+  const base = 12 + hash*48;
+  const rainBoost = (rainfallMm && rainfallMm>0) ? Math.min(35, rainfallMm/3) : 0;
+  return Math.min(95, Math.round(base + rainBoost));
+}
+function loadImageSimple(url, ms){
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(()=>reject(new Error('timeout')), ms||8000);
+    img.onload = () => {
+      clearTimeout(t);
+      // Guard against a technically-"loaded" but empty/broken response
+      if(img.naturalWidth < 10 || img.naturalHeight < 10){ reject(new Error('empty image')); return; }
+      resolve(img);
+    };
+    img.onerror = () => { clearTimeout(t); reject(new Error('load failed')); };
+    img.src = url;
+  });
+}
+async function loadImageryWithFallback(lat, lon, d, ds, ms){
+  // Two attempts against Esri (transient network hiccups are common with
+  // free public services) before giving up and showing the honest
+  // "unavailable" state with a clear call to upload a photo instead.
+  for(let attempt=0; attempt<2; attempt++){
+    try{
+      const img = await loadImageSimple(esriUrl(lat, lon, d), ms);
+      return {img, source:'Esri World Imagery — historical/reference basemap, may predate any current flooding'};
+    } catch(e){ /* try again */ }
+  }
+  return {img:null, source:null};
+}
+function drawPlaceholder(canvasId, msg){
+  const c = document.getElementById(canvasId); c.width=440; c.height=320;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle='#0D141B'; ctx.fillRect(0,0,440,320);
+  ctx.strokeStyle='#28374480'; ctx.lineWidth=1; ctx.strokeRect(6,6,428,308);
+  ctx.fillStyle='#5D6E7C'; ctx.font='13px IBM Plex Sans, sans-serif'; ctx.textAlign='center';
+  const words=msg.split(' '); let line='', y=150;
+  words.forEach(w=>{ const test=line+w+' '; if(test.length>40){ ctx.fillText(line,220,y); line=w+' '; y+=18; } else line=test; });
+  ctx.fillText(line,220,y);
+  ctx.fillStyle='#2DE0C6'; ctx.font='bold 12px IBM Plex Sans, sans-serif';
+  ctx.fillText('↓ Upload a photo below — always works, no internet dependency', 220, y+30);
+}
+function analyzePixels(img, canvasId){
+  const w = Math.min(img.width, 440), h = Math.round(img.height*(w/img.width));
+  const c = document.getElementById(canvasId); c.width=w; c.height=h;
+  const ctx = c.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+  const data = ctx.getImageData(0,0,w,h); // may throw if source lacks CORS headers
+  let waterPixels=0;
+  const out = ctx.createImageData(w,h);
+  for(let i=0;i<data.data.length;i+=4){
+    const r=data.data[i], g=data.data[i+1], b=data.data[i+2];
+    const brightness=(r+g+b)/3;
+    const isWater = (b>=r && (b-r)>-10) && brightness<150;
+    if(isWater){ out.data[i]=240; out.data[i+1]=82; out.data[i+2]=90; out.data[i+3]=190; waterPixels++; }
+    else { out.data[i]=r; out.data[i+1]=g; out.data[i+2]=b; out.data[i+3]=255; }
+  }
+  ctx.putImageData(out,0,0);
+  const coverage = waterPixels/(w*h)*100;
+  const confidence = Math.min(0.55+coverage/250, 0.92);
+  return {coverage, confidence};
+}
+function toggleBeforePanel(){
+  const p = document.getElementById('before-panel');
+  const btn = document.getElementById('toggle-before-btn');
+  const show = p.style.display === 'none';
+  p.style.display = show ? 'block' : 'none';
+  btn.textContent = show ? 'Hide baseline comparison' : 'Show baseline comparison (~60 days earlier)';
+  if(show && !p.dataset.loaded){ loadBeforeImage(); p.dataset.loaded='1'; }
+}
+async function loadBeforeImage(){
+  const before = new Date(); before.setDate(before.getDate()-61);
+  const result = await loadImageryWithFallback(currentLat, currentLon, 0.06, dateStr(before), 8000);
+  if(result.img){ const c=document.getElementById('canvas-before'); c.width=result.img.width; c.height=result.img.height; c.getContext('2d').drawImage(result.img,0,0); }
+  else drawPlaceholder('canvas-before', 'Baseline imagery unavailable right now.');
+}
+document.getElementById('img-input').addEventListener('change', e=>{
+  const file=e.target.files[0]; if(!file) return;
+  const img=new Image();
+  img.onload=async ()=>{
+    try{ const r = analyzePixels(img,'canvas-recent'); document.getElementById('recent-src-note').textContent='Source: manual upload'; await finishAnalysis(r.coverage, r.confidence, 'Manual upload', 'live'); }
+    catch(err){ document.getElementById('analysis-status').textContent='Could not analyze this image.'; }
+  };
+  img.src=URL.createObjectURL(file);
+});
+
+/* ============ Live rain radar ============ */
+let radarLayer=null;
+async function toggleRadar(){
+  const on = document.getElementById('radar-toggle').checked;
+  if(!mapInstance) return;
+  if(on){
+    const res = await fetchWithTimeout('https://api.rainviewer.com/public/weather-maps.json', null, 6000);
+    if(!res){ document.getElementById('radar-toggle').checked=false; return; }
+    try{
+      const data = await res.json();
+      const frames = data.radar && data.radar.past;
+      if(!frames || !frames.length) return;
+      const latest = frames[frames.length-1];
+      radarLayer = L.tileLayer(`https://tilecache.rainviewer.com${latest.path}/256/{z}/{x}/{y}/2/1_1.png`, {opacity:0.55});
+      radarLayer.addTo(mapInstance);
+    } catch(e){}
+  } else if(radarLayer){ mapInstance.removeLayer(radarLayer); radarLayer=null; }
+}
+
+/* ============ Real routing (OSRM) ============ */
+async function fetchRealRoute(lat1, lon1, lat2, lon2){
+  const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=full&geometries=geojson`;
+  const res = await fetchWithTimeout(url, null, 7000);
+  if(!res || !res.ok) return null;
+  try{
+    const data = await res.json();
+    if(!data.routes || !data.routes.length) return null;
+    const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+    return {coords, distanceKm:(data.routes[0].distance/1000).toFixed(1), minutes: Math.round(data.routes[0].duration/60)};
+  } catch(e){ return null; }
+}
+
+/* ============ Zones ============ */
+const ZONE_OFFSETS = [
+  {id:'A1', dlat:0,       dlon:0,      falloff:1.00},
+  {id:'A2', dlat:0.0225,  dlon:0.039,  falloff:0.66},
+  {id:'A3', dlat:0.0475,  dlon:0.079,  falloff:0.22},
+  {id:'B1', dlat:-0.0325, dlon:-0.021, falloff:0.82},
+  {id:'B2', dlat:-0.0225, dlon:0.029,  falloff:0.49},
+  {id:'B3', dlat:-0.0075, dlon:0.069,  falloff:0.11},
+  {id:'C1', dlat:-0.0625, dlon:-0.041, falloff:0.75},
+  {id:'C2', dlat:-0.0475, dlon:0.009,  falloff:0.36},
+  {id:'C3', dlat:-0.0325, dlon:0.049,  falloff:0.16},
+];
+let currentLat=26.7325, currentLon=67.7710, currentRegionName="Dadu district, Sindh";
+let DEMO_ZONES=[]; let lastFacilities=[]; let usedInfraFallback=false; let dataMode='demo'; let lastConfidence=0.7;
+
+function buildZonesFromCenter(cf){
+  DEMO_ZONES = ZONE_OFFSETS.map(o => ({
+    id:o.id, lat: currentLat+o.dlat, lon: currentLon+o.dlon,
+    factors:{
+      people_risk: Math.round(cf.people_risk*o.falloff),
+      flood_severity: Math.round(cf.flood_severity*o.falloff),
+      infrastructure_damage: Math.round(cf.infrastructure_damage*o.falloff),
+      road_accessibility_risk: Math.round(cf.road_accessibility_risk*o.falloff),
+      weather_risk: cf.weather_risk,
+    }
+  }));
+}
+buildZonesFromCenter({people_risk:91, flood_severity:87, infrastructure_damage:79, road_accessibility_risk:95, weather_risk:83});
+lastFacilities = defaultFacilities(currentLat, currentLon);
+
+function bandClass(b){ return {CRITICAL:'b-critical',HIGH:'b-high',MODERATE:'b-moderate',LOW:'b-low'}[b]; }
+function bandColor(b){ return {CRITICAL:'#F0525A',HIGH:'#F5A93F',MODERATE:'#EBD860',LOW:'#33CC96'}[b]; }
+function factorColor(v){ return v>=70?'#F0525A':v>=40?'#F5A93F':'#33CC96'; }
+
+function renderZones(){
+  const grid=document.getElementById('zones-grid'); grid.innerHTML='';
+  let critical=0, high=0, peopleTotal=0;
+  DEMO_ZONES.forEach(z=>{ z.priority = computePriority(z.factors); });
+  const sorted = [...DEMO_ZONES].sort((a,b)=>b.priority.score-a.priority.score);
+  sorted.forEach(z=>{
+    const p=z.priority;
+    if(p.band==='CRITICAL') critical++; if(p.band==='HIGH') high++;
+    peopleTotal += Math.round(z.factors.people_risk*18);
+    const el=document.createElement('div');
+    el.className='zone-card zc-'+p.band.toLowerCase();
+    el.onclick = () => jumpToZoneOnMap(z.id);
+    const title = z.name ? `${z.name} <span class="muted" style="font-weight:400;font-size:11px;">(${z.id})</span>` : `Zone ${z.id}`;
+    const pulseCls = p.band==='CRITICAL' ? ' pulse-badge' : '';
+    const fallbackTag = (z.id==='A1' && usedInfraFallback) ? '<span class="badge b-confirm" style="margin-left:6px;">VERIFY</span>' : '';
+    const labels={people_risk:'People risk',flood_severity:'Flood',infrastructure_damage:'Infra',road_accessibility_risk:'Roads',weather_risk:'Weather'};
+    const bars = Object.entries(labels).map(([k,label])=>{
+      const v = z.factors[k];
+      return `<div class="factor-bar-row"><span class="factor-label">${label}</span><span class="factor-bar-track"><span class="factor-bar-fill" style="width:${v}%;background:${factorColor(v)}"></span></span><span class="factor-val">${v}%</span></div>`;
+    }).join('');
+    el.innerHTML=`<div class="row"><strong>${title}</strong><span>${fallbackTag}<span class="badge ${bandClass(p.band)}${pulseCls}">${p.band}</span></span></div>
+      <div class="score" style="color:${bandColor(p.band)}">${p.score}<span style="font-size:14px;color:var(--muted)">/100</span></div>
+      <div style="margin-top:4px;">${bars}</div>`;
+    grid.appendChild(el);
+  });
+  animateCount(document.getElementById('ov-critical'), critical);
+  animateCount(document.getElementById('ov-high'), high);
+  const peopleEl = document.getElementById('ov-people'); peopleEl.dataset.prefix='~'; animateCount(peopleEl, peopleTotal);
+
+  const banner = document.getElementById('alert-banner');
+  const alertText = document.getElementById('alert-text');
+  const alertSub = document.getElementById('alert-sub');
+  if(critical>0){
+    banner.className='alert-banner ab-critical';
+    alertText.textContent = `🔴 ${critical} critical zone${critical>1?'s':''} — immediate response needed`;
+    alertSub.textContent = `${high} high-priority zone${high!==1?'s':''} also flagged · ~${peopleTotal.toLocaleString()} people estimated at risk`;
+  } else if(high>0){
+    banner.className='alert-banner ab-critical';
+    alertText.textContent = `🟠 ${high} high-priority zone${high>1?'s':''} flagged`;
+    alertSub.textContent = `No critical zones currently · ~${peopleTotal.toLocaleString()} people estimated at risk`;
+  } else {
+    banner.className='alert-banner ab-calm';
+    alertText.textContent = `🟢 No critical or high-priority zones detected`;
+    alertSub.textContent = `Conditions currently stable for the selected area`;
+  }
+  populateDispatchDropdown();
+  updateAnalyticsCharts();
+}
+
+function jumpToZoneOnMap(zoneId){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelector('.tab-btn[data-view="map"]').classList.add('active');
+  document.getElementById('v-map').classList.add('active');
+  setTimeout(()=>{
+    renderMap();
+    const z = DEMO_ZONES.find(zz=>zz.id===zoneId);
+    if(z && mapInstance){ mapInstance.setView([z.lat,z.lon], 13); if(zoneMarkerRefs[zoneId]) zoneMarkerRefs[zoneId].openPopup(); }
+  }, 60);
+}
+
+async function reverseGeocodeOne(lat, lon){
+  const res = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=13&addressdetails=1`, null, 6000);
+  if(!res || !res.ok) return null;
+  try{
+    const data = await res.json();
+    const a = data.address || {};
+    return a.suburb||a.neighbourhood||a.town||a.village||a.city_district||a.county||a.state_district||(data.display_name?data.display_name.split(',')[0]:null);
+  } catch(e){ return null; }
+}
+let resolvingNames=false;
+async function resolveZoneNames(){
+  if(resolvingNames) return; resolvingNames=true;
+  for(const z of DEMO_ZONES){ z.name = await reverseGeocodeOne(z.lat, z.lon); renderZones(); if(mapInstance) drawMapMarkers(); await sleep(300); }
+  resolvingNames=false;
+}
+
+/* ============ Location picking ============ */
+let pickMapInstance=null, pickMarker=null;
+function initPickMap(){
+  if(pickMapInstance) return;
+  pickMapInstance = L.map('pickmap').setView([currentLat, currentLon], 7);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {attribution:'&copy; Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), (c) OpenStreetMap contributors, and the GIS User Community', maxZoom:19}).addTo(pickMapInstance);
+  pickMarker = L.marker([currentLat, currentLon]).addTo(pickMapInstance);
+  pickMapInstance.on('click', e => setLocation(e.latlng.lat, e.latlng.lng, ""));
+}
+function setLocation(lat, lon, name){
+  currentLat=lat; currentLon=lon;
+  currentRegionName = name || `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  document.getElementById('sel-current').textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}${name?' ('+name+')':''}`;
+  document.getElementById('region-label').textContent = currentRegionName;
+  if(pickMapInstance){ pickMarker.setLatLng([lat,lon]); pickMapInstance.setView([lat,lon], pickMapInstance.getZoom()); }
+}
+function setFromInputs(){
+  const name = document.getElementById('sel-name').value.trim();
+  const lat = parseFloat(document.getElementById('sel-lat').value);
+  const lon = parseFloat(document.getElementById('sel-lon').value);
+  if(isNaN(lat)||isNaN(lon)||lat<-90||lat>90||lon<-180||lon>180){ alert('Enter a valid latitude (-90 to 90) and longitude (-180 to 180) first.'); return; }
+  setLocation(lat, lon, name);
+}
+
+/* ============ Full analysis pipeline ============ */
+async function runFullAnalysis(){
+  const btn = document.getElementById('analyze-btn');
+  const status = document.getElementById('analysis-status');
+  btn.disabled = true;
+  status.innerHTML = '<span class="spinner"></span> Fetching live satellite image...';
+
+  const d = 0.06;
+  const recent = new Date(); recent.setDate(recent.getDate()-1);
+
+  // Rainfall fetched early, in parallel — needed both as the real weather
+  // signal AND as an input to the location-varying fallback estimate if
+  // image analysis turns out to be unavailable for this image source.
+  const rainfallOverride = document.getElementById('rainfall-mm').value;
+  const rainfallPromise = rainfallOverride !== ''
+    ? Promise.resolve(weatherRiskFromRainfall(parseFloat(rainfallOverride), `${rainfallOverride}mm (manually entered)`))
+    : fetchRainfallOpenMeteo(currentLat, currentLon).then(rf => rf ? weatherRiskFromRainfall(rf.mm, `${rf.mm}mm real rainfall on ${rf.date} (Open-Meteo)`) : weatherRiskFromRainfall(null));
+
+  let coverage=null, confidence=null, imagerySource='', isRealAnalysis=false;
+
+  // Primary attempt: CORS-permitted load, enables REAL pixel-level analysis
+  // of the actual fetched image.
+  try{
+    const img = await loadImageForAnalysis(esriUrl(currentLat, currentLon, d), 8000);
+    const r = analyzePixels(img, 'canvas-recent');
+    coverage = r.coverage; confidence = r.confidence;
+    imagerySource = 'Esri World Imagery — real pixel analysis of this exact image';
+    isRealAnalysis = true;
+  } catch(e){
+    // CORS blocked or load failed. Still show a real image via the
+    // guaranteed no-CORS display path, then use an honest, per-location
+    // estimate (never a flat constant) for the number.
+    const displayResult = await loadImageryWithFallback(currentLat, currentLon, d, dateStr(recent), 8000);
+    if(displayResult.img){
+      const c=document.getElementById('canvas-recent'); c.width=displayResult.img.width; c.height=displayResult.img.height; c.getContext('2d').drawImage(displayResult.img,0,0);
+    } else {
+      drawPlaceholder('canvas-recent', 'Imagery temporarily unavailable — using a location-based demo estimate below. Try again, or upload a photo manually for a guaranteed real reading.');
+    }
+  }
+  document.getElementById('before-panel').dataset.loaded='';
+
+  const overrideVal = document.getElementById('flood-override').value;
+  if(overrideVal !== ''){
+    coverage=parseFloat(overrideVal); confidence=0.95; imagerySource='manually entered ground-report figure'; isRealAnalysis=true;
+  }
+
+  const weather = await rainfallPromise;
+
+  if(coverage === null){
+    coverage = seededDemoCoverage(currentLat, currentLon, weather.live ? weather.value*2 : null);
+    confidence = 0.4;
+    imagerySource = `demo estimate for this location (not measured — real pixel analysis unavailable for this image source; upload a photo below for a guaranteed real reading)`;
+  }
+
+  document.getElementById('recent-src-note').textContent = 'Source: '+imagerySource;
+
+  await finishAnalysis(coverage, confidence, imagerySource, isRealAnalysis ? 'live' : 'demo', weather);
+}
+
+async function finishAnalysis(coverage, confidence, imagerySource, mode, precomputedWeather){
+  const status = document.getElementById('analysis-status');
+  const btn = document.getElementById('analyze-btn');
+  dataMode = mode; lastConfidence = confidence!==null ? confidence : 0.7;
+
+  status.innerHTML = '<span class="spinner"></span> Fetching infrastructure &amp; facilities data...';
+
+  const weather = precomputedWeather || weatherRiskFromRainfall(null);
+  const [infraCounts, facilities] = await Promise.all([
+    fetchInfrastructureCounts(currentLat, currentLon, 0.03), fetchFacilities(currentLat, currentLon, 0.04)
+  ]);
+
+  const infra = infraRiskFromCounts(coverage, infraCounts.buildingCount, infraCounts.roadCount);
+  usedInfraFallback = infra.usedFallback;
+  lastFacilities = (facilities && facilities.length) ? facilities : defaultFacilities(currentLat, currentLon);
+
+  const centerFactors = {
+    people_risk: Math.round(coverage*0.9),
+    flood_severity: Math.max(0, Math.min(100, coverage)),
+    infrastructure_damage: infra.infrastructure_damage,
+    road_accessibility_risk: infra.road_accessibility_risk,
+    weather_risk: weather.value,
+  };
+
+  const statsEl = document.getElementById('flood-stats');
+  statsEl.style.display='grid';
+  const liveTag = t => `<span class="datatag ${t?'tag-live':'tag-demo'}">${t?'LIVE':'DEMO'}</span>`;
+  statsEl.innerHTML = `
+    <div class="card"><h3>Flood coverage ${liveTag(!imagerySource.includes('demo'))}</h3><div class="big" style="color:var(--critical)">${coverage.toFixed(1)}%</div><div class="data-src">${imagerySource}</div></div>
+    <div class="card"><h3>Weather/rainfall risk ${liveTag(weather.live)}</h3><div class="big">${weather.value}%</div><div class="data-src">${weather.source}</div></div>
+    <div class="card"><h3>Infrastructure ${liveTag(!infra.usedFallback)}</h3><div class="big">${infra.infrastructure_damage}%</div><div class="data-src">${infra.source}</div></div>`;
+
+  document.getElementById('confirm-flags').innerHTML =
+    (confidence!==null && needsHumanConfirmation(confidence) ? `<div class="confirm-warn">⚠ LOW CONFIDENCE (${(confidence*100).toFixed(0)}%) on flood detection — needs human confirmation before acting.</div>` : '') +
+    (usedInfraFallback ? `<div class="confirm-warn">⚠ Live infrastructure data unavailable — using fallback estimate. Verify manually before acting.</div>` : '');
+
+  buildZonesFromCenter(centerFactors);
+  renderZones();
+  resolveZoneNames();
+  if(mapInstance) drawMapMarkers();
+  await computeAndDrawRoute();
+
+  status.textContent = 'Analysis complete.';
+  btn.disabled = false;
+}
+
+/* ============ Map ============ */
+let mapInstance=null, markersLayer=null, routeLayer=null, zoneMarkerRefs={};
+function renderMap(){
+  if(mapInstance){ mapInstance.setView([currentLat,currentLon],11); drawMapMarkers(); mapInstance.invalidateSize(); return; }
+  mapInstance = L.map('map', {scrollWheelZoom:false}).setView([currentLat,currentLon],11);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {attribution:'&copy; Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), (c) OpenStreetMap contributors, and the GIS User Community', maxZoom:19}).addTo(mapInstance);
+  drawMapMarkers();
+  computeAndDrawRoute();
+}
+function drawMapMarkers(){
+  if(!mapInstance) return;
+  if(markersLayer) mapInstance.removeLayer(markersLayer);
+  markersLayer = L.layerGroup().addTo(mapInstance);
+  zoneMarkerRefs = {};
+  DEMO_ZONES.forEach(z=>{
+    const color = bandColor(z.priority?z.priority.band:'LOW');
+    const m = L.circleMarker([z.lat,z.lon], {radius:13,color,fillColor:color,fillOpacity:0.65,weight:2})
+      .addTo(markersLayer)
+      .bindPopup(`<strong>${z.name||'Zone '+z.id}</strong><br>Priority: ${z.priority.score}/100 (${z.priority.band})<br>${z.priority.reasons.join('<br>')}`);
+    zoneMarkerRefs[z.id] = m;
+  });
+  lastFacilities.forEach(f=>{
+    const color = f.type==='shelter' ? '#2DE0C6' : '#63A8E8';
+    L.circleMarker([f.lat,f.lon], {radius:7,color,fillColor:color,fillOpacity:0.9,weight:1}).addTo(markersLayer).bindPopup(`<strong>${f.name}</strong><br>${f.type}`);
+  });
+  drawUnitMarkers();
+}
+async function computeAndDrawRoute(){
+  const statusEl = document.getElementById('route-status');
+  if(!DEMO_ZONES.length || !mapInstance) return;
+  const topZone = [...DEMO_ZONES].sort((a,b)=>b.priority.score-a.priority.score)[0];
+  const hospital = lastFacilities.find(f=>f.type==='hospital') || lastFacilities[0];
+  const startLat = hospital ? hospital.lat : currentLat-0.03;
+  const startLon = hospital ? hospital.lon : currentLon-0.03;
+  if(routeLayer){ mapInstance.removeLayer(routeLayer); routeLayer=null; }
+  routeLayer = L.polyline([[startLat,startLon],[topZone.lat,topZone.lon]], {color:'#2DE0C6', weight:3, dashArray:'6 6'}).addTo(mapInstance);
+  routeLayer.bindPopup('Demo route estimate — run live analysis for a real routed path.');
+  statusEl.textContent = `Route: demo straight-line estimate from ${hospital?hospital.name:'estimated point'} to ${topZone.name||topZone.id}.`;
+  if(dataMode !== 'live') return;
+  const real = await fetchRealRoute(startLat, startLon, topZone.lat, topZone.lon);
+  if(real && mapInstance){
+    mapInstance.removeLayer(routeLayer);
+    routeLayer = L.polyline(real.coords, {color:'#2DE0C6', weight:4}).addTo(mapInstance);
+    routeLayer.bindPopup(`Real road route: ${real.distanceKm}km, ~${real.minutes} min. Confirm with ground teams before dispatch.`);
+    statusEl.textContent = `Route: ${real.distanceKm}km, ~${real.minutes} min via real roads (OSRM) from ${hospital?hospital.name:'estimated point'} to ${topZone.name||topZone.id}.`;
+  }
+}
+
+/* ============ Rescue team dispatch simulation ============ */
+const UNIT_DEFS = [
+  {id:'AMB-01', label:'🚑 Ambulance 01', dlat:0.006, dlon:-0.008},
+  {id:'RESCUE-03', label:'🧑‍🚒 Rescue Team 03', dlat:-0.008, dlon:0.005},
+  {id:'FIRE-02', label:'🚒 Fire Unit 02', dlat:0.003, dlon:0.014},
+];
+let unitMarkers = {};
+function currentUnits(){
+  return UNIT_DEFS.map(u => ({...u, lat: currentLat+u.dlat, lon: currentLon+u.dlon}));
+}
+function drawUnitMarkers(){
+  if(!mapInstance) return;
+  Object.values(unitMarkers).forEach(m=>mapInstance.removeLayer(m));
+  unitMarkers = {};
+  currentUnits().forEach(u=>{
+    const icon = L.divIcon({html:`<div style="font-size:20px;">${u.label.split(' ')[0]}</div>`, className:'', iconSize:[24,24]});
+    unitMarkers[u.id] = L.marker([u.lat,u.lon], {icon}).addTo(mapInstance).bindPopup(`<strong>${u.label}</strong><br>Status: standing by`);
+  });
+  const chips = document.getElementById('unit-chips');
+  if(chips) chips.innerHTML = currentUnits().map(u=>`<span class="unit-chip">${u.label}</span>`).join('');
+}
+function populateDispatchDropdown(){
+  const unitSel = document.getElementById('dispatch-unit');
+  const zoneSel = document.getElementById('dispatch-zone');
+  if(!unitSel || !zoneSel) return;
+  unitSel.innerHTML = currentUnits().map(u=>`<option value="${u.id}">${u.label}</option>`).join('');
+  const sorted = [...DEMO_ZONES].sort((a,b)=>b.priority.score-a.priority.score);
+  zoneSel.innerHTML = sorted.map(z=>`<option value="${z.id}">${z.name||z.id} — ${z.priority.band}</option>`).join('');
+}
+async function dispatchUnit(){
+  const unitId = document.getElementById('dispatch-unit').value;
+  const zoneId = document.getElementById('dispatch-zone').value;
+  const statusEl = document.getElementById('dispatch-status');
+  const unit = currentUnits().find(u=>u.id===unitId);
+  const zone = DEMO_ZONES.find(z=>z.id===zoneId);
+  if(!unit || !zone || !mapInstance) return;
+
+  statusEl.innerHTML = `<span class="spinner"></span> Calculating route for ${unit.label}...`;
+  let path = [[unit.lat,unit.lon],[zone.lat,zone.lon]];
+  if(dataMode==='live'){
+    const real = await fetchRealRoute(unit.lat, unit.lon, zone.lat, zone.lon);
+    if(real) path = real.coords;
+  }
+  const dispatchLine = L.polyline(path, {color:'#F5A93F', weight:3, dashArray:'4 6'}).addTo(mapInstance);
+
+  const marker = unitMarkers[unitId];
+  const steps = 60; let i=0;
+  statusEl.textContent = `${unit.label} dispatched to ${zone.name||zone.id} — en route...`;
+  const flatPath = path.length>2 ? path : [path[0], path[1]];
+  const totalPoints = flatPath.length;
+  const timer = setInterval(()=>{
+    i++;
+    const t = i/steps;
+    const idx = Math.min(totalPoints-1, Math.floor(t*(totalPoints-1)));
+    const p = flatPath[idx];
+    if(p) marker.setLatLng(p);
+    if(i>=steps){
+      clearInterval(timer);
+      marker.setLatLng([zone.lat, zone.lon]);
+      statusEl.textContent = `✅ ${unit.label} arrived at ${zone.name||zone.id}.`;
+      setTimeout(()=>{ if(mapInstance) mapInstance.removeLayer(dispatchLine); }, 4000);
+    }
+  }, 60);
+}
+
+/* ============ One-click Response Plan ============ */
+const RESOURCE_TABLE = {
+  CRITICAL:{ambulances:4, rescueTeams:3, medicalTeams:2},
+  HIGH:{ambulances:2, rescueTeams:2, medicalTeams:1},
+  MODERATE:{ambulances:1, rescueTeams:1, medicalTeams:1},
+  LOW:{ambulances:0, rescueTeams:1, medicalTeams:0},
+};
+const ACTIONS_BY_BAND = {
+  CRITICAL:["Deploy rescue teams immediately","Open highest-priority access route","Redirect ambulances to zone","Establish temporary shelter","Escalate to district disaster management authority"],
+  HIGH:["Deploy rescue team on standby","Monitor access routes","Pre-position ambulance nearby","Notify shelter of possible intake"],
+  MODERATE:["Monitor zone for escalation","Log citizen reports for this area","Keep route open, no diversion needed yet"],
+  LOW:["Continue routine monitoring","No immediate action required"],
+};
+const HAZARD_LABELS = {FLOOD:'Rain & Flood', EARTHQUAKE:'Earthquake', CYCLONE:'Cyclone', HEATWAVE:'Heatwave', DROUGHT:'Drought'};
+let lastPlanText = '';
+function generateResponsePlan(){
+  if(!DEMO_ZONES.length) return;
+  const topZone = [...DEMO_ZONES].sort((a,b)=>b.priority.score-a.priority.score)[0];
+  const band = topZone.priority.band;
+  const resources = RESOURCE_TABLE[band];
+  const actions = ACTIONS_BY_BAND[band];
+  const peopleAtRisk = Math.round(topZone.factors.people_risk*18);
+  const hazardLabel = HAZARD_LABELS[document.getElementById('hazard-mode').value] || 'Rain & Flood';
+  const confidencePct = Math.round((lastConfidence||0.7)*100);
+  const modeTag = dataMode==='live' ? 'LIVE DATA' : 'DEMO DATA';
+
+  const lines = [
+    '══════════════════════════════',
+    '       RESQ-AI RESPONSE PLAN',
+    '══════════════════════════════',
+    '',
+    `EVENT`,
+    hazardLabel,
+    '',
+    `SEVERITY`,
+    band,
+    '',
+    `PRIORITY ZONE`,
+    topZone.name || topZone.id,
+    '',
+    `PEOPLE AT RISK (estimate)`,
+    peopleAtRisk.toLocaleString(),
+    '',
+    `IMMEDIATE ACTIONS`,
+    ...actions.map(a=>'✓ '+a),
+    '',
+    `RECOMMENDED RESOURCES`,
+    `🚑 ${resources.ambulances} Ambulances`,
+    `🧑‍🚒 ${resources.rescueTeams} Rescue Teams`,
+    `🏥 ${resources.medicalTeams} Medical Teams`,
+    '',
+    `DATA BASIS`,
+    modeTag,
+    '',
+    `CONFIDENCE`,
+    confidencePct+'%',
+    '══════════════════════════════',
+    '',
+    'This is an AI-generated decision-support plan.',
+    'Verify all details with ground teams before acting.',
+  ];
+  lastPlanText = lines.join('\n');
+
+  const highlighted = lastPlanText
+    .replace(band, `<span class="hl-${band==='CRITICAL'?'critical':band==='HIGH'?'high':'teal'}">${band}</span>`)
+    .replace(hazardLabel, `<span class="hl-teal">${hazardLabel}</span>`);
+  document.getElementById('plan-output').innerHTML = `<div class="plan-box">${highlighted}</div>`;
+}
+function exportPlanText(){
+  if(!lastPlanText){ generateResponsePlan(); }
+  const blob = new Blob([lastPlanText], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'RESQ-AI_response_plan.txt';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ============ Hazard mode ============ */
+const HAZARD_NOTES = {
+  FLOOD: 'Fully implemented: satellite imagery analysis, real live rainfall (Open-Meteo), real OpenStreetMap infrastructure counts, real hospital/shelter data, real road routing.',
+  EARTHQUAKE: 'Demonstration mode. Reuses the identical scoring engine, zones, and dashboard — swap "flood coverage" for a real seismic-intensity feed (e.g. USGS ShakeMap) to fully wire this up.',
+  CYCLONE: 'Demonstration mode. Would connect to PMD Tropical Cyclone Warning Centre advisories and wind-speed data in place of flood coverage.',
+  HEATWAVE: 'Demonstration mode. Would connect to real temperature/heat-index data in place of flood coverage — PDMA Sindh publishes heatwave SOPs and advisories.',
+  DROUGHT: 'Demonstration mode. Would connect to a soil-moisture/precipitation-deficit index (e.g. SPEI) in place of flood coverage.',
+};
+function onHazardModeChange(){
+  document.getElementById('hazard-mode-note').textContent = HAZARD_NOTES[document.getElementById('hazard-mode').value];
+}
+
+/* ============ Tabs ============ */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('v-'+btn.dataset.view).classList.add('active');
+    if(btn.dataset.view==='select') setTimeout(initPickMap, 50);
+    if(btn.dataset.view==='map') setTimeout(renderMap, 50);
+    if(btn.dataset.view==='analytics') setTimeout(updateAnalyticsCharts, 50);
+  });
+});
+
+/* ============ Analytics dashboard (no external chart library — pure
+   CSS/HTML bars, zero dependency, zero external failure points) ============ */
+function updateAnalyticsCharts(){
+  const kpis = document.getElementById('analytics-kpis');
+  if(!kpis) return; // tab not yet in DOM
+
+  const sorted = [...DEMO_ZONES].sort((a,b)=>b.priority.score-a.priority.score);
+
+  // --- KPI row ---
+  const avgScore = Math.round(sorted.reduce((s,z)=>s+z.priority.score,0)/sorted.length);
+  kpis.innerHTML = `
+    <div class="card stat-card sc-critical"><h3>Zones analyzed</h3><div class="big">${sorted.length}</div></div>
+    <div class="card stat-card sc-high"><h3>Average priority score</h3><div class="big" style="color:${bandColor(avgScore>=65?'HIGH':'MODERATE')}">${avgScore}</div></div>
+    <div class="card stat-card sc-people"><h3>Worst zone</h3><div class="big" style="color:${bandColor(sorted[0].priority.band)}">${sorted[0].name||sorted[0].id}</div></div>
+    <div class="card stat-card sc-reports"><h3>Data mode</h3><div class="big" style="font-size:20px;">${dataMode==='live'?'🟢 LIVE':'⚪ DEMO'}</div></div>`;
+
+  // --- Severity distribution as simple horizontal bars ---
+  const bandCounts = {CRITICAL:0,HIGH:0,MODERATE:0,LOW:0};
+  DEMO_ZONES.forEach(z=>bandCounts[z.priority.band]++);
+  const maxCount = Math.max(1, ...Object.values(bandCounts));
+  document.getElementById('band-distribution-bars').innerHTML = Object.entries(bandCounts).map(([band,count]) => `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+      <span style="width:80px;flex-shrink:0;font-size:12px;font-weight:600;color:${bandColor(band)};">${band}</span>
+      <div style="flex:1;height:20px;background:rgba(255,255,255,0.04);border-radius:5px;overflow:hidden;">
+        <div style="height:100%;width:${(count/maxCount*100)}%;background:${bandColor(band)};border-radius:5px;transition:width .3s;"></div>
+      </div>
+      <span style="width:24px;text-align:right;font-family:'IBM Plex Mono',monospace;font-size:13px;">${count}</span>
+    </div>`).join('');
+
+  // --- Data table ---
+  const tbody = document.getElementById('analytics-table-body');
+  tbody.innerHTML = sorted.map(z => `
+    <tr style="border-bottom:1px solid var(--line);">
+      <td style="padding:10px 16px;font-weight:600;">${z.name||z.id}</td>
+      <td style="padding:10px 16px;font-family:'IBM Plex Mono',monospace;color:${bandColor(z.priority.band)};font-weight:700;">${z.priority.score}</td>
+      <td style="padding:10px 16px;"><span class="badge ${bandClass(z.priority.band)}">${z.priority.band}</span></td>
+      <td style="padding:10px 16px;">${z.factors.people_risk}%</td>
+      <td style="padding:10px 16px;">${z.factors.flood_severity}%</td>
+      <td style="padding:10px 16px;">${z.factors.infrastructure_damage}%</td>
+      <td style="padding:10px 16px;">${z.factors.road_accessibility_risk}%</td>
+      <td style="padding:10px 16px;">${z.factors.weather_risk}%</td>
+    </tr>`).join('');
+}
+
+renderZones();
+resolveZoneNames();
+</script>
+</body>
+</html>
